@@ -58,13 +58,14 @@ final class OverlayView: NSView {
         NSColor.black.withAlphaComponent(0.30).setFill()
         bounds.fill()
 
+        // Hint in a high-contrast rounded pill so it stays readable on any background.
         let hint = "Drag to select   ·   Enter to record   ·   hold Shift to record instantly   ·   Esc to cancel"
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 13, weight: .medium),
-            .foregroundColor: NSColor.white.withAlphaComponent(0.85),
+            .foregroundColor: NSColor.white,
         ]
-        let hs = hint.size(withAttributes: attrs)
-        hint.draw(at: NSPoint(x: bounds.midX - hs.width / 2, y: bounds.maxY - 60), withAttributes: attrs)
+        drawChip(text: hint, attrs: attrs, centerX: bounds.midX, topY: bounds.maxY - 36,
+                 padH: 16, padV: 9, cornerRadius: nil)
 
         guard let r = currentRect, r.width > 0, r.height > 0 else { return }
         if let ctx = NSGraphicsContext.current?.cgContext { ctx.clear(r) }   // see-through hole
@@ -88,6 +89,28 @@ final class OverlayView: NSView {
             .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
             .foregroundColor: NSColor.white,
         ]
-        label.draw(at: NSPoint(x: r.minX + 2, y: r.maxY + 4), withAttributes: lattrs)
+        let lsize = label.size(withAttributes: lattrs)
+        // Place the dimension chip just above the box, or just below if there's no room.
+        var chipY = r.maxY + 6
+        if chipY + lsize.height + 6 > bounds.maxY { chipY = r.minY - lsize.height - 12 }
+        drawChip(text: label, attrs: lattrs, leftX: r.minX, bottomY: chipY, padH: 6, padV: 3, cornerRadius: 5)
+    }
+
+    /// Draws text inside a filled rounded chip. Provide either `centerX`/`topY` (centered, pinned by
+    /// its top) or `leftX`/`bottomY` (pinned by its bottom-left). A nil cornerRadius makes a full pill.
+    private func drawChip(text: String, attrs: [NSAttributedString.Key: Any],
+                          centerX: CGFloat? = nil, topY: CGFloat? = nil,
+                          leftX: CGFloat? = nil, bottomY: CGFloat? = nil,
+                          padH: CGFloat, padV: CGFloat, cornerRadius: CGFloat?) {
+        let size = text.size(withAttributes: attrs)
+        let w = size.width + padH * 2
+        let h = size.height + padV * 2
+        let originX: CGFloat = leftX ?? ((centerX ?? bounds.midX) - w / 2)
+        let originY: CGFloat = bottomY ?? ((topY ?? bounds.maxY) - h)
+        let rect = NSRect(x: originX, y: originY, width: w, height: h)
+        let radius = cornerRadius ?? h / 2
+        NSColor.black.withAlphaComponent(0.72).setFill()
+        NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+        text.draw(at: NSPoint(x: rect.minX + padH, y: rect.minY + padV), withAttributes: attrs)
     }
 }

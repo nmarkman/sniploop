@@ -11,6 +11,8 @@ final class AppController: NSObject, NSApplicationDelegate {
     private let exporter = Exporter()
     private var recordingControl: RecordingControl?
     private var recordingBorder: RecordingBorder?
+    private var recordingStopKey: GlobalHotKey?
+    private var recordingCancelKey: GlobalHotKey?
     private var lastSelection: NSRect = .zero
 
     private let settingsManager = SettingsManager(store: UserDefaultsSettingsStore())
@@ -87,6 +89,16 @@ final class AppController: NSObject, NSApplicationDelegate {
         control.show()
         recordingControl = control
 
+        // Keyboard control while recording: Return stops + generates, Escape cancels.
+        // Global Carbon hotkeys (no Accessibility), registered only during recording.
+        // Dispatch async so the hotkey isn't torn down from inside its own callback.
+        recordingStopKey = GlobalHotKey.returnKey { [weak self] in
+            DispatchQueue.main.async { self?.finishRecording() }
+        }
+        recordingCancelKey = GlobalHotKey.escapeKey { [weak self] in
+            DispatchQueue.main.async { self?.cancelRecording() }
+        }
+
         Task {
             do {
                 try await capture.start(screen: screen, selection: selection, showsCursor: settings.showCursor)
@@ -101,6 +113,8 @@ final class AppController: NSObject, NSApplicationDelegate {
         recordingControl = nil
         recordingBorder?.close()
         recordingBorder = nil
+        recordingStopKey = nil
+        recordingCancelKey = nil
     }
 
     private func finishRecording() {

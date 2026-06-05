@@ -10,7 +10,7 @@ final class RecordingControl: NSObject {
 
     /// `region` is in global screen points (bottom-left origin).
     init(near region: NSRect, on screen: NSScreen) {
-        let size = NSSize(width: 184, height: 40)
+        let size = NSSize(width: 232, height: 40)
         var origin = NSPoint(x: region.minX, y: region.maxY + 10)
         if origin.y + size.height > screen.frame.maxY - 6 { origin.y = region.minY - size.height - 10 }
         origin.x = max(screen.frame.minX + 6, min(origin.x, screen.frame.maxX - size.width - 6))
@@ -35,9 +35,9 @@ final class RecordingControl: NSObject {
 
         super.init()
 
-        let stop = NSButton(title: "Stop", target: self, action: #selector(stopTapped))
+        let stop = NSButton(title: "Stop ⏎", target: self, action: #selector(stopTapped))
         stop.bezelStyle = .rounded
-        let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelTapped))
+        let cancel = NSButton(title: "Cancel ⎋", target: self, action: #selector(cancelTapped))
         cancel.bezelStyle = .rounded
 
         let stack = NSStackView(views: [timeLabel, stop, cancel])

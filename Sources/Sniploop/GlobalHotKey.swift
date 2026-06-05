@@ -35,4 +35,18 @@ final class GlobalHotKey {
         hk.onFire = onFire
         return hk
     }
+
+    /// Plain Return, with no modifiers. Used transiently while recording (stop).
+    static func returnKey(onFire: @escaping () -> Void) -> GlobalHotKey {
+        let hk = GlobalHotKey(keyCode: UInt32(kVK_Return), modifiers: 0)
+        hk.onFire = onFire
+        return hk
+    }
+
+    /// Plain Escape, with no modifiers. Used transiently while recording (cancel).
+    static func escapeKey(onFire: @escaping () -> Void) -> GlobalHotKey {
+        let hk = GlobalHotKey(keyCode: UInt32(kVK_Escape), modifiers: 0)
+        hk.onFire = onFire
+        return hk
+    }
 }

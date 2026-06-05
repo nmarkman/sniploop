@@ -6,6 +6,9 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var hotKey: GlobalHotKey?
     private var overlay: OverlayWindow?
     private var captureScreen: NSScreen?
+    private let capture = CaptureEngine()
+    private var recordingControl: RecordingControl?
+    private var lastSelection: NSRect = .zero
 
     func applicationDidFinishLaunching(_ note: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -43,8 +46,63 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     private func beginRecording(selection: NSRect) {
+        guard let screen = captureScreen else { return }
         dismissOverlay()
-        NSLog("Sniploop: beginRecording rect=\(NSStringFromRect(selection))")
+        lastSelection = selection
+
+        let global = NSRect(x: selection.minX + screen.frame.minX,
+                            y: selection.minY + screen.frame.minY,
+                            width: selection.width, height: selection.height)
+        let control = RecordingControl(near: global, on: screen)
+        control.onStop = { [weak self] in self?.finishRecording() }
+        control.onCancel = { [weak self] in self?.cancelRecording() }
+        control.show()
+        recordingControl = control
+
+        Task {
+            do {
+                try await capture.start(screen: screen, selection: selection, showsCursor: true)
+            } catch {
+                await MainActor.run { self.failCapture(error) }
+            }
+        }
+    }
+
+    private func finishRecording() {
+        recordingControl?.close()
+        recordingControl = nil
+        Task {
+            let url = await capture.stop()
+            await MainActor.run {
+                if let url { NSLog("Sniploop: master saved at \(url.path)") }
+                self.handleMaster(url)
+            }
+        }
+    }
+
+    private func cancelRecording() {
+        recordingControl?.close()
+        recordingControl = nil
+        Task { await capture.cancel() }
+    }
+
+    private func handleMaster(_ url: URL?) {
+        // Exporter wired in Task 18. For now, reveal the raw master to prove capture works.
+        if let url { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+    }
+
+    private func failCapture(_ error: Error) {
+        recordingControl?.close()
+        recordingControl = nil
+        let a = NSAlert()
+        a.messageText = "Can't record the screen"
+        a.informativeText = "Sniploop needs Screen Recording permission.\n\nEnable Sniploop under System Settings > Privacy & Security > Screen Recording, then try again.\n\n(\(error.localizedDescription))"
+        a.addButton(withTitle: "Open Settings")
+        a.addButton(withTitle: "OK")
+        if a.runModal() == .alertFirstButtonReturn,
+           let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+            NSWorkspace.shared.open(u)
+        }
     }
 
     // URL scheme: sniploop://capture

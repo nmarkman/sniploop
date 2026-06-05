@@ -47,6 +47,14 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-codesign --force --sign - "$RES/gifski" >/dev/null 2>&1 || true
-codesign --force --sign - "$APP" >/dev/null 2>&1 || true
-echo "Built $APP"
+# Prefer a stable self-signed identity so the Screen Recording grant survives rebuilds.
+# (Ad-hoc signing mints a new identity each build, which invalidates the TCC grant.)
+# Falls back to ad-hoc when the identity isn't present (e.g. on someone else's machine).
+# Create the identity once via Keychain Access (Certificate Assistant) or the commands in docs.
+SIGN_ID="${SNIPLOOP_SIGN_ID:-Sniploop Dev}"
+if ! security find-identity -p codesigning | grep -q "$SIGN_ID"; then
+    SIGN_ID="-"
+fi
+codesign --force --sign "$SIGN_ID" "$RES/gifski" >/dev/null 2>&1 || true
+codesign --force --deep --sign "$SIGN_ID" "$APP" >/dev/null 2>&1 || true
+echo "Built $APP (signing identity: $SIGN_ID)"

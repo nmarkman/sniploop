@@ -10,15 +10,34 @@ final class AppController: NSObject, NSApplicationDelegate {
     private let capture = CaptureEngine()
     private let exporter = Exporter()
     private var recordingControl: RecordingControl?
+    private var recordingBorder: RecordingBorder?
     private var lastSelection: NSRect = .zero
+
+    private let settingsManager = SettingsManager(store: UserDefaultsSettingsStore())
+    private var settings = Settings.defaults
+    private var settingsWindow: SettingsWindowController?
 
     func applicationDidFinishLaunching(_ note: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        settings = settingsManager.load()
         let mb = MenuBarController()
         mb.onNewCapture = { [weak self] in self?.startCapture() }
+        mb.onSettings = { [weak self] in self?.openSettings() }
         mb.onQuit = { NSApp.terminate(nil) }
         menuBar = mb
         hotKey = GlobalHotKey.defaultCapture { [weak self] in self?.startCapture() }
+    }
+
+    private func openSettings() {
+        if settingsWindow == nil {
+            settingsWindow = SettingsWindowController(settings: settings) { [weak self] updated in
+                guard let self else { return }
+                self.settings = updated
+                self.settingsManager.save(updated)
+            }
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        settingsWindow?.showWindow()
     }
 
     func startCapture() {
@@ -55,6 +74,13 @@ final class AppController: NSObject, NSApplicationDelegate {
         let global = NSRect(x: selection.minX + screen.frame.minX,
                             y: selection.minY + screen.frame.minY,
                             width: selection.width, height: selection.height)
+
+        // Persistent boundary frame around the region. Drawn just OUTSIDE the captured rect,
+        // so it stays visible while recording but never appears in the output.
+        let border = RecordingBorder(around: global)
+        border.show()
+        recordingBorder = border
+
         let control = RecordingControl(near: global, on: screen)
         control.onStop = { [weak self] in self?.finishRecording() }
         control.onCancel = { [weak self] in self?.cancelRecording() }
@@ -63,51 +89,60 @@ final class AppController: NSObject, NSApplicationDelegate {
 
         Task {
             do {
-                try await capture.start(screen: screen, selection: selection, showsCursor: true)
+                try await capture.start(screen: screen, selection: selection, showsCursor: settings.showCursor)
             } catch {
                 await MainActor.run { self.failCapture(error) }
             }
         }
     }
 
-    private func finishRecording() {
+    private func closeRecordingChrome() {
         recordingControl?.close()
         recordingControl = nil
+        recordingBorder?.close()
+        recordingBorder = nil
+    }
+
+    private func finishRecording() {
+        closeRecordingChrome()
         Task {
             let url = await capture.stop()
-            await MainActor.run {
-                if let url { NSLog("Sniploop: master saved at \(url.path)") }
-                self.handleMaster(url)
-            }
+            await MainActor.run { self.handleMaster(url) }
         }
     }
 
     private func cancelRecording() {
-        recordingControl?.close()
-        recordingControl = nil
+        closeRecordingChrome()
         Task { await capture.cancel() }
     }
 
     private func handleMaster(_ url: URL?) {
         guard let master = url else { return }
+        let settings = self.settings
         Task {
             do {
                 let movDuration = try await AVURLAsset(url: master).load(.duration).seconds
-                let spec = EditSpec.identity(duration: movDuration, fps: 15)
+                let spec = EditSpec.identity(duration: movDuration, fps: settings.defaultFPS)
+                var primary: URL?
 
-                let gif = try await exporter.exportGIF(master: master, spec: spec)
-                let savedGIF = try Output.save(gif, toFolder: Settings.defaults.destinationFolderPath, ext: "gif")
-
-                await MainActor.run {
-                    Output.copyGIFToClipboard(savedGIF)
-                    Output.reveal(savedGIF)
-                    NSLog("Sniploop: GIF saved + copied at \(savedGIF.path)")
+                if settings.defaultFormat.producesGIF {
+                    let gif = try await exporter.exportGIF(master: master, spec: spec)
+                    let savedGIF = try Output.save(gif, toFolder: settings.destinationFolderPath, ext: "gif")
+                    primary = savedGIF
+                    await MainActor.run {
+                        Output.copyGIFToClipboard(savedGIF)
+                        NSLog("Sniploop: GIF saved + copied at \(savedGIF.path)")
+                    }
                 }
-
-                let mp4 = try await exporter.exportMP4(master: master, spec: spec)
-                let savedMP4 = try Output.save(mp4, toFolder: Settings.defaults.destinationFolderPath, ext: "mp4")
-                await MainActor.run { NSLog("Sniploop: MP4 saved at \(savedMP4.path)") }
-
+                if settings.defaultFormat.producesMP4 {
+                    let mp4 = try await exporter.exportMP4(master: master, spec: spec)
+                    let savedMP4 = try Output.save(mp4, toFolder: settings.destinationFolderPath, ext: "mp4")
+                    if primary == nil { primary = savedMP4 }
+                    await MainActor.run { NSLog("Sniploop: MP4 saved at \(savedMP4.path)") }
+                }
+                if let primary {
+                    await MainActor.run { Output.reveal(primary) }
+                }
                 try? FileManager.default.removeItem(at: master)
             } catch {
                 await MainActor.run {
@@ -121,8 +156,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     private func failCapture(_ error: Error) {
-        recordingControl?.close()
-        recordingControl = nil
+        closeRecordingChrome()
         let a = NSAlert()
         a.messageText = "Can't record the screen"
         a.informativeText = "Sniploop needs Screen Recording permission.\n\nEnable Sniploop under System Settings > Privacy & Security > Screen Recording, then try again.\n\n(\(error.localizedDescription))"

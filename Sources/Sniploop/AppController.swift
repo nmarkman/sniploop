@@ -3,6 +3,7 @@ import SniploopCore
 
 final class AppController: NSObject, NSApplicationDelegate {
     private var menuBar: MenuBarController?
+    private var hotKey: GlobalHotKey?
 
     func applicationDidFinishLaunching(_ note: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -10,6 +11,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         mb.onNewCapture = { [weak self] in self?.startCapture() }
         mb.onQuit = { NSApp.terminate(nil) }
         menuBar = mb
+        hotKey = GlobalHotKey.defaultCapture { [weak self] in self?.startCapture() }
     }
 
     func startCapture() {

@@ -12,34 +12,36 @@ Promote the single-file POC into a maintainable structure without changing behav
 - **Deliverable:** the existing POC behavior, building from the new structure.
 - **Verify:** hotkeyless launch still does drag to GIF (the POC loop) from the new layout.
 
-## Phase 1: Menu-bar shell + global hotkey
+## Phase 1: Menu-bar shell + triggers (hotkey + URL scheme)
 
 - Add `NSStatusItem` menu bar item: New Capture, Settings (stub), Quit.
-- Integrate the KeyboardShortcuts package; register a default Shift-Cmd-6 to trigger New Capture. Confirm it works with **no Accessibility permission** (Carbon hotkey).
+- Integrate the KeyboardShortcuts package; register a default Hyper-chord hotkey to trigger New Capture. Confirm the picker accepts multi-modifier Hyper chords (Caps-Lock-as-Hyper bindings work as a normal chord) and that it works with **no Accessibility permission** (Carbon hotkey).
+- Register the `sniploop://capture` URL scheme (`CFBundleURLTypes` in `Info.plist`) and handle it so Raycast / Shortcuts / Automator can trigger a capture.
 - App becomes resident (does not quit after one capture).
-- **Deliverable:** press the hotkey from anywhere, get the selector; app lives in the menu bar.
-- **Verify:** hotkey fires across spaces/apps; menu items work; no Accessibility prompt appears.
+- **Deliverable:** trigger the selector from the hotkey AND from `open sniploop://capture`; app lives in the menu bar.
+- **Verify:** hotkey fires across spaces/apps; the URL trigger works from Terminal and Raycast; menu items work; no Accessibility prompt appears.
 
 ## Phase 2: Capture-to-disk core (the pivotal change)
 
 Replace the POC's in-memory CGImage buffer with a disk-backed video master.
 
 - `CaptureEngine`: SCStream sample buffers appended to an `AVAssetWriter` (H.264, 30 fps source) writing a temp `.mov`. Handle SCK idle frames via presentation timestamps so static stretches stay in sync.
+- **Selector UX upgrade:** add a glow/highlight around the selection box; make it confirm-to-record by default (box persists on release; re-drag to redraw, drag to move/resize, Enter or click Record to start), with a held-Shift quick mode that records instantly on release.
 - Floating recording control: elapsed timer, Stop, Cancel. Stop finalizes the writer and returns the temp URL; Cancel discards.
-- Position the control clear of the captured region.
+- Position the control clear of the captured region (and keep the selection glow out of the recorded frame).
 - For this phase, on Stop just save the raw `.mov` to the output folder and reveal it (editor/export come next).
-- **Deliverable:** hotkey to a saved screen-region MP4, unbounded duration, flat memory.
-- **Verify:** record 60+ seconds, confirm memory stays flat and the file plays back with the correct region/scale on Retina and on a second display.
+- **Deliverable:** hotkey to a saved screen-region MP4, unbounded duration, flat memory, with the confirm/quick-mode selector.
+- **Verify:** record 60+ seconds, confirm memory stays flat and the file plays back with the correct region/scale on Retina and on a second display; confirm re-drag, move/resize, and Shift quick mode all behave; confirm no glow appears in the output.
 
 ## Phase 3: Export pipeline (GIF + MP4)
 
-- `Exporter` with one interface: `(sourceURL, EditSpec) -> outputURL`. For this phase `EditSpec` is identity (no edits yet).
-- **MP4 path:** AVFoundation export of the master.
-- **GIF path:** `AVAssetImageGenerator` frames at a fixed fps, piped to the bundled encoder.
-  - Bundle the encoder binary (gifski primary) in `Resources/`, invoke as a child process, confirm it runs from inside the signed bundle.
+- `Exporter` with one interface: `(masterURL, EditSpec) -> outputURL`, backed by the **bundled ffmpeg**. For this phase `EditSpec` is identity (no edits yet).
+- Bundle the ffmpeg binary (LGPL build) in `Resources/`, invoke as a child process, confirm it runs from inside the signed bundle.
+- **GIF path:** two-pass `palettegen` then `paletteuse` with `dither=sierra2_4a`.
+- **MP4 path:** H.264; stream-copy (`-c copy`) when the EditSpec is trim-only, re-encode when crop/scale applies.
 - `Output`: save to configured folder, reveal in Finder, and **Copy GIF to clipboard**.
 - **Deliverable:** Stop produces a real GIF and an MP4 on demand; clipboard copy works.
-- **Verify:** GIF is visibly cleaner and at least ~40 percent smaller than the POC/system-encoder output for the same clip. Paste-test the clipboard GIF into Slack, Notion, Gmail, Jira and record what works (open decision 10.2 in the PRD).
+- **Verify:** GIF is visibly cleaner and at least ~40 percent smaller than the POC/system-encoder output for the same clip. Paste-test the clipboard GIF into Slack, Notion, Gmail, Jira and record what works (open decision 1 in the PRD).
 
 ## Phase 4: Editor
 
@@ -47,21 +49,23 @@ Replace the POC's in-memory CGImage buffer with a disk-backed video master.
 - **Trim:** timeline with in/out handles; preview respects the trim.
 - **Frame rate:** 10 / 15 / 24 / 30 selector.
 - **Crop / resize:** adjustable crop rectangle over a frame, plus output max-width presets (480 / 640 / 800 / original), aspect preserved.
-- Build the `AVMutableComposition` / `AVVideoComposition` from the `EditSpec` and feed it to BOTH exports, so preview equals output.
+- Build the `AVMutableComposition` / `AVVideoComposition` from the `EditSpec` for live preview; the same `EditSpec` drives the ffmpeg exporter, so preview matches output.
 - Best-effort estimated output size.
 - Export bar: Copy GIF, Save GIF, Save MP4; remember last action as default.
-- **Deliverable:** full capture to edit to export loop.
-- **Verify:** trimmed/cropped/fps-reduced exports match the preview exactly for both GIF and MP4.
+- **Keyboard shortcuts** on all primary actions (play/pause, set in/out, change fps, Copy GIF, Save GIF, Save MP4) plus an in-app **cheatsheet** (press `?`).
+- **Deliverable:** full capture to edit to export loop, keyboard-driven.
+- **Verify:** trimmed/cropped/fps-reduced exports match the preview for both GIF and MP4; every primary action has a working shortcut and appears in the cheatsheet.
 
-## Phase 5: Polish, settings, packaging
+## Phase 5: Polish, settings, distribution
 
-- Settings window (SwiftUI): hotkey binding, default folder, default export action, default fps, default max width, show-cursor toggle, launch-at-login, Screen Recording permission status + deep link.
+- Settings window (SwiftUI): hotkey binding (Hyper chords), **default destination folder**, default export action, default fps, default max width, **quick-mode modifier**, show-cursor toggle, launch-at-login, Screen Recording permission status + deep link.
 - Last-region recall (re-use without re-dragging).
 - Permission UX: clear first-run explanation and recovery, no crashes.
-- Packaging: finalize `build.sh` to embed and sign the encoder binary; add a documented, flag-gated path to Developer ID + notarization (hardened runtime, `notarytool`) for later sharing.
+- Packaging: finalize `build.sh` to embed and sign the ffmpeg binary; add a documented, flag-gated path to Developer ID + notarization (hardened runtime, `notarytool`, including the embedded ffmpeg) for sharing.
+- Distribution: add a permissive `LICENSE` (MIT or Apache-2.0) and a `README` with macOS install instructions; prep the public GitHub repo. (sniploop.app landing page is post-v1.)
 - Optional stretch: "Recent captures" menu.
-- **Deliverable:** v1 Nick would use daily and could hand to someone else with a later notarization flip.
-- **Verify:** fresh-machine-style run (or after resetting TCC) walks cleanly through permission, capture, edit, export.
+- **Deliverable:** v1 Nick would use daily and a coworker could install from the repo with a later notarization flip.
+- **Verify:** fresh-machine-style run (or after resetting TCC) walks cleanly through permission, capture, edit, export, following only the README.
 
 ## Sequencing notes
 

@@ -2,4 +2,5 @@
 // Each task appends its run...() call here.
 runVersionTests()
 runCaptureGeometryTests()
+runEditSpecTests()
 T.finish()

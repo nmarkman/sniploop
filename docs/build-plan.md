@@ -2,6 +2,17 @@
 
 Phased plan to take Sniploop from validated POC to a daily-driver v1. Each phase ends in something runnable and testable, so the build never goes dark for long. Reference: `docs/PRD.md`.
 
+## Status (2026-06-05)
+
+- **Phase 0 (scaffold): DONE.** SwiftPM package, `SniploopCore` library + assertion test harness.
+- **Phase 1 (menu bar + triggers): DONE.** Menu bar app, Carbon Hyper+G hotkey, `sniploop://capture` URL scheme. (Note: hotkey is hardcoded; a rebinding UI is M4.)
+- **Phase 2 (capture-to-disk + selector): DONE.** ScreenCaptureKit -> AVAssetWriter temp `.mov`, glow + confirm/quick-mode selector, persistent recording border, floating control, keyboard stop/cancel.
+- **Phase 3 (export pipeline): DONE.** gifski GIF + AVFoundation MP4, output handling, clipboard, plus a Settings-driven output-format choice (GIF / MP4 / Both).
+- **Phase 4 (editor): NOT STARTED.** This is M3, the next milestone.
+- **Phase 5 (polish / settings / distribution): PARTIAL.** Settings window (format, fps, destination, show-cursor) and stable dev signing are done. Remaining: rebindable-hotkey UI, multi-display, last-region recall, launch-at-login, Developer ID + notarization, public-release README.
+
+The detailed task plan for the completed phases is `docs/superpowers/plans/2026-06-05-sniploop-foundation.md`. Editor (M3) and remaining M4 work still need their own plans.
+
 ## Phase 0: Project scaffold
 
 Promote the single-file POC into a maintainable structure without changing behavior yet.

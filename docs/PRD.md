@@ -1,6 +1,14 @@
 # Sniploop PRD
 
-Working name: **Sniploop**. A fast, native macOS region GIF recorder. Status: POC validated, building v1.
+Working name: **Sniploop**. A fast, native macOS region GIF recorder. Status: **v1 foundation implemented and working** (see Implementation Status below).
+
+## Implementation Status (as of 2026-06-05)
+
+Milestones M0 to M2 are built, tested, and working daily. Highlights of what is implemented: the global Carbon hotkey and `sniploop://capture` URL trigger; the region selector with glow, confirm-to-record, Shift quick-mode, and high-contrast HUD chips; the persistent recording border drawn outside the captured area; ScreenCaptureKit capture to a temp `.mov`; gifski GIF + AVFoundation MP4 export with a per-app default **output format** setting (GIF / MP4 / Both); save/reveal/clipboard; a Settings window (format, fps, destination, show-cursor) persisted via UserDefaults; and keyboard stop/cancel during recording (Return stops + exports, Escape cancels). A stable self-signed dev signing identity keeps the Screen Recording grant across rebuilds.
+
+Beyond the original M0 to M2 plan, the following were added based on real-use feedback: the output-format setting (instead of always producing both GIF and MP4), the persistent recording border, keyboard stop/cancel, and the HUD-chip restyle.
+
+Not yet implemented: the in-app editor (M3: trim/crop/fps with preview), and most of M4 (rebindable-hotkey UI, multi-display, last-region recall, launch-at-login, Developer ID + notarization for distribution). Current simplifications: exports use an identity `EditSpec` (full clip, source size, fps from Settings); single-display capture. See `README.md` and `docs/build-plan.md`.
 
 ## 1. Summary
 

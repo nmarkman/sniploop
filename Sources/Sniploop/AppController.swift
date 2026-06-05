@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import SniploopCore
 
 final class AppController: NSObject, NSApplicationDelegate {
@@ -7,6 +8,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var overlay: OverlayWindow?
     private var captureScreen: NSScreen?
     private let capture = CaptureEngine()
+    private let exporter = Exporter()
     private var recordingControl: RecordingControl?
     private var lastSelection: NSRect = .zero
 
@@ -87,8 +89,30 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     private func handleMaster(_ url: URL?) {
-        // Exporter wired in Task 18. For now, reveal the raw master to prove capture works.
-        if let url { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+        guard let master = url else { return }
+        Task {
+            do {
+                let movDuration = try await AVURLAsset(url: master).load(.duration).seconds
+                let spec = EditSpec.identity(duration: movDuration, fps: 15)
+
+                let gif = try await exporter.exportGIF(master: master, spec: spec)
+                let savedGIF = try Output.save(gif, toFolder: Settings.defaults.destinationFolderPath, ext: "gif")
+
+                await MainActor.run {
+                    Output.copyGIFToClipboard(savedGIF)
+                    Output.reveal(savedGIF)
+                    NSLog("Sniploop: GIF saved + copied at \(savedGIF.path)")
+                }
+                try? FileManager.default.removeItem(at: master)
+            } catch {
+                await MainActor.run {
+                    let a = NSAlert()
+                    a.messageText = "Export failed"
+                    a.informativeText = "\(error)"
+                    a.runModal()
+                }
+            }
+        }
     }
 
     private func failCapture(_ error: Error) {

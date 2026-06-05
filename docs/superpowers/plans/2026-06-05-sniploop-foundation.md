@@ -1033,13 +1033,15 @@ app.run()
 ```swift
 import AppKit
 
-final class MenuBarController {
+// Subclasses NSObject so menu target/action dispatch (ObjC messaging) works.
+final class MenuBarController: NSObject {
     private let statusItem: NSStatusItem
     var onNewCapture: (() -> Void)?
     var onQuit: (() -> Void)?
 
-    init() {
+    override init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        super.init()
         statusItem.button?.image = NSImage(systemSymbolName: "rectangle.dashed.badge.record", accessibilityDescription: "Sniploop")
 
         let menu = NSMenu()

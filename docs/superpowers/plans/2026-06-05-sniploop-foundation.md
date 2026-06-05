@@ -6,7 +6,7 @@
 
 **Architecture:** All real logic lives in a pure `SniploopCore` Swift library and is built strictly red/green with XCTest (`swift test`). The `Sniploop` executable is thin AppKit/ScreenCaptureKit/AVFoundation glue that wires the core into the OS; because that glue cannot be meaningfully unit-tested, each glue task ends in a build-green step plus an explicit manual verification checklist. A `build.sh` wraps the SwiftPM executable into a signed `.app` bundle with the gifski binary embedded.
 
-**Tech Stack:** Swift 6.2 (Swift 5 language mode for lenient concurrency), SwiftPM, a stdlib assertion harness run via `swift run SniploopCoreTests` (see Testing Harness note below), AppKit, ScreenCaptureKit, AVFoundation, the KeyboardShortcuts package (Carbon hotkeys, no Accessibility permission), and the gifski CLI (bundled).
+**Tech Stack:** Swift 6.2 (Swift 5 language mode for lenient concurrency), SwiftPM, a stdlib assertion harness run via `swift run SniploopCoreTests` (see Testing Harness note below), AppKit, ScreenCaptureKit, AVFoundation, a direct Carbon `RegisterEventHotKey` global hotkey (no Accessibility permission, no third-party dependency), and the gifski CLI (bundled).
 
 **Scope note:** This plan covers Milestones M0 to M2 from `docs/build-plan.md`. The editor (M3) and settings UI + distribution (M4) are deliberately out of scope here and will each get their own plan. At the end of this plan the app captures with an *identity* EditSpec (full clip, source fps, no crop): a working capture-to-GIF tool, just without the editing step.
 
@@ -37,6 +37,7 @@ Sources/
   Sniploop/                           # THIN GLUE (manual-verify only)
     main.swift                        # NSApplication bootstrap
     AppController.swift               # orchestrates the flow; hotkey + URL handlers
+    GlobalHotKey.swift                # Carbon RegisterEventHotKey global hotkey
     MenuBarController.swift           # NSStatusItem menu
     OverlayWindow.swift               # borderless per-display selection overlay
     OverlayView.swift                 # crosshair, glow box, drives SelectionMachine
@@ -79,22 +80,16 @@ import PackageDescription
 let package = Package(
     name: "Sniploop",
     platforms: [.macOS(.v14)],
-    dependencies: [
-        .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", from: "2.0.0"),
-    ],
     targets: [
         .target(name: "SniploopCore"),
-        .executableTarget(
-            name: "Sniploop",
-            dependencies: [
-                "SniploopCore",
-                .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
-            ]
-        ),
-        .testTarget(name: "SniploopCoreTests", dependencies: ["SniploopCore"]),
+        .executableTarget(name: "Sniploop", dependencies: ["SniploopCore"]),
+        // Tests run as a plain executable (XCTest/Testing need Xcode). Run: swift run SniploopCoreTests
+        .executableTarget(name: "SniploopCoreTests", dependencies: ["SniploopCore"]),
     ]
 )
 ```
+
+(Note: the original plan declared a KeyboardShortcuts dependency and a `.testTarget`. Both changed: the test target is a plain executable because XCTest/Testing need Xcode, and KeyboardShortcuts was dropped because its `#Preview` macro needs Xcode too. Task 12 implements the hotkey directly with Carbon. Sniploop is now zero-dependency.)
 
 - [ ] **Step 2: Write a trivial core symbol so the library compiles**
 
@@ -1113,44 +1108,80 @@ git commit -m "feat(app): NSApplication bootstrap, menu bar, URL-scheme + startC
 
 ---
 
-## Task 12: Global hotkey via KeyboardShortcuts (no Accessibility)
+## Task 12: Global hotkey via Carbon RegisterEventHotKey (no Accessibility, no dependency)
+
+We implement the global hotkey directly with Carbon instead of the KeyboardShortcuts package. KeyboardShortcuts uses the `#Preview` macro, whose plugin ships only with Xcode (not CommandLineTools), so it cannot build in this environment. Carbon `RegisterEventHotKey` is global without the Accessibility permission, exactly what the PRD wants, and adds zero dependencies. Rebindable-hotkey UI is an M4 concern; this task hardcodes the default Hyper+G chord.
 
 **Files:**
+- Create: `Sources/Sniploop/GlobalHotKey.swift`
 - Modify: `Sources/Sniploop/AppController.swift`
 
-- [ ] **Step 1: Add the shortcut name and registration**
+- [ ] **Step 1: Create `GlobalHotKey.swift`**
 
-Add to the top of `AppController.swift` (after imports):
 ```swift
-import KeyboardShortcuts
+import AppKit
+import Carbon.HIToolbox
 
-extension KeyboardShortcuts.Name {
-    // Default: Hyper (Cmd-Ctrl-Opt-Shift) + G. A Caps-Lock-as-Hyper setup sends this same chord.
-    static let newCapture = Self("newCapture", default: .init(.g, modifiers: [.command, .control, .option, .shift]))
+/// A process-global hotkey via Carbon's RegisterEventHotKey. Global without the Accessibility
+/// permission that NSEvent global monitors require, and with no third-party dependency.
+final class GlobalHotKey {
+    private var hotKeyRef: EventHotKeyRef?
+    private var eventHandler: EventHandlerRef?
+    var onFire: (() -> Void)?
+
+    /// `keyCode` is a Carbon virtual key code (e.g. kVK_ANSI_G); `modifiers` combine
+    /// cmdKey / controlKey / optionKey / shiftKey.
+    init(keyCode: UInt32, modifiers: UInt32) {
+        var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        InstallEventHandler(GetApplicationEventTarget(), { _, _, userData in
+            guard let userData else { return noErr }
+            Unmanaged<GlobalHotKey>.fromOpaque(userData).takeUnretainedValue().onFire?()
+            return noErr
+        }, 1, &eventType, Unmanaged.passUnretained(self).toOpaque(), &eventHandler)
+
+        let id = EventHotKeyID(signature: OSType(0x534E4C50), id: 1) // 'SNLP'
+        RegisterEventHotKey(keyCode, modifiers, id, GetApplicationEventTarget(), 0, &hotKeyRef)
+    }
+
+    deinit {
+        if let hotKeyRef { UnregisterEventHotKey(hotKeyRef) }
+        if let eventHandler { RemoveEventHandler(eventHandler) }
+    }
+
+    /// The default Sniploop trigger: Hyper (Cmd-Ctrl-Opt-Shift) + G. A Caps-Lock-as-Hyper
+    /// setup (via Raycast/Karabiner) sends this same chord.
+    static func defaultCapture(onFire: @escaping () -> Void) -> GlobalHotKey {
+        let hk = GlobalHotKey(keyCode: UInt32(kVK_ANSI_G),
+                              modifiers: UInt32(cmdKey | controlKey | optionKey | shiftKey))
+        hk.onFire = onFire
+        return hk
+    }
 }
 ```
 
-- [ ] **Step 2: Register the handler in `applicationDidFinishLaunching`**
+- [ ] **Step 2: Register it in `AppController.applicationDidFinishLaunching`**
 
+Add a property to `AppController`:
+```swift
+    private var hotKey: GlobalHotKey?
+```
 Add at the end of `applicationDidFinishLaunching`:
 ```swift
-KeyboardShortcuts.onKeyUp(for: .newCapture) { [weak self] in
-    self?.startCapture()
-}
+        hotKey = GlobalHotKey.defaultCapture { [weak self] in self?.startCapture() }
 ```
 
 - [ ] **Step 3: Build and verify**
 
 Run: `./build.sh && open Sniploop.app`
 Manual verification:
-- Press the Hyper+G chord (Cmd-Ctrl-Opt-Shift-G) from any app; `startCapture invoked` logs.
+- Press the Hyper+G chord (Cmd-Ctrl-Opt-Shift-G) from any app; `startCapture invoked` logs (via `log stream --predicate 'eventMessage CONTAINS "Sniploop:"'` or Console.app).
 - Critically: **no Accessibility permission prompt appears** (Carbon hotkeys do not need it). Confirm Sniploop is absent from System Settings > Privacy & Security > Accessibility.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add Sources/Sniploop/AppController.swift
-git commit -m "feat(app): global Hyper-chord hotkey via KeyboardShortcuts"
+git add Sources/Sniploop/GlobalHotKey.swift Sources/Sniploop/AppController.swift
+git commit -m "feat(app): global Hyper-chord hotkey via Carbon RegisterEventHotKey"
 ```
 
 ---

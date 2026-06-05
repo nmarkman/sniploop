@@ -15,7 +15,7 @@ Promote the single-file POC into a maintainable structure without changing behav
 ## Phase 1: Menu-bar shell + triggers (hotkey + URL scheme)
 
 - Add `NSStatusItem` menu bar item: New Capture, Settings (stub), Quit.
-- Integrate the KeyboardShortcuts package; register a default Hyper-chord hotkey to trigger New Capture. Confirm the picker accepts multi-modifier Hyper chords (Caps-Lock-as-Hyper bindings work as a normal chord) and that it works with **no Accessibility permission** (Carbon hotkey).
+- Implement a Carbon `RegisterEventHotKey` global hotkey directly (no third-party dependency); register a default Hyper-chord (Cmd-Ctrl-Opt-Shift-G) to trigger New Capture. A Caps-Lock-as-Hyper binding sends the same chord. Confirm it works with **no Accessibility permission** (Carbon hotkey).
 - Register the `sniploop://capture` URL scheme (`CFBundleURLTypes` in `Info.plist`) and handle it so Raycast / Shortcuts / Automator can trigger a capture.
 - App becomes resident (does not quit after one capture).
 - **Deliverable:** trigger the selector from the hotkey AND from `open sniploop://capture`; app lives in the menu bar.

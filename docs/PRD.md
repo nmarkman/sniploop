@@ -57,7 +57,7 @@ Common thread: small region, a few seconds, shared immediately into another tool
 - Resident menu-bar app (`LSUIElement`, no Dock icon). Menu bar item with: New Capture, Settings, Quit, and (stretch) Recent captures.
 - Global hotkey to trigger capture, rebindable in Settings. The picker accepts multi-modifier Hyper chords, so a Caps-Lock-as-Hyper binding (set up via Raycast or Karabiner) works as an ordinary chord.
 - **URL scheme `sniploop://capture`** so Raycast, Shortcuts, Automator, or any launcher can trigger a capture without using the in-app hotkey.
-- **No Accessibility permission required.** Use a Carbon `RegisterEventHotKey`-based hotkey (via the KeyboardShortcuts package), which is global without the Accessibility grant that `NSEvent` global monitors need.
+- **No Accessibility permission required.** Use a Carbon `RegisterEventHotKey`-based hotkey (implemented directly, no third-party dependency), which is global without the Accessibility grant that `NSEvent` global monitors need.
 - Optional launch-at-login.
 
 ### 7.2 Region selector

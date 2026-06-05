@@ -54,19 +54,30 @@ final class CaptureEngine: NSObject, SCStreamOutput {
         stream = s
     }
 
+    /// Idempotent: a second call (e.g. from a repeated stop hotkey) returns the same URL without
+    /// re-finalizing the writer, which would otherwise throw on markAsFinished/finishWriting.
     func stop() async -> URL? {
-        if let s = stream { try? await s.stopCapture() }
-        stream = nil
-        input?.markAsFinished()
-        await writer?.finishWriting()
+        guard let w = writer else { return outputURL }
+        writer = nil
+        let s = stream; stream = nil
+        let inp = input; input = nil
+        if let s { try? await s.stopCapture() }
+        inp?.markAsFinished()
+        await w.finishWriting()
         return outputURL
     }
 
     func cancel() async {
-        if let s = stream { try? await s.stopCapture() }
-        stream = nil
-        input?.markAsFinished()
-        await writer?.finishWriting()
+        guard let w = writer else {
+            if let url = outputURL { try? FileManager.default.removeItem(at: url); outputURL = nil }
+            return
+        }
+        writer = nil
+        let s = stream; stream = nil
+        let inp = input; input = nil
+        if let s { try? await s.stopCapture() }
+        inp?.markAsFinished()
+        await w.finishWriting()
         if let url = outputURL { try? FileManager.default.removeItem(at: url) }
         outputURL = nil
     }

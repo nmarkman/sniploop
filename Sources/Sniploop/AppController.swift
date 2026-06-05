@@ -13,6 +13,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var recordingBorder: RecordingBorder?
     private var recordingStopKey: GlobalHotKey?
     private var recordingCancelKey: GlobalHotKey?
+    private var isStopping = false
     private var lastSelection: NSRect = .zero
 
     private let settingsManager = SettingsManager(store: UserDefaultsSettingsStore())
@@ -71,6 +72,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private func beginRecording(selection: NSRect) {
         guard let screen = captureScreen else { return }
         dismissOverlay()
+        isStopping = false
         lastSelection = selection
 
         let global = NSRect(x: selection.minX + screen.frame.minX,
@@ -118,6 +120,8 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     private func finishRecording() {
+        guard !isStopping else { return }
+        isStopping = true
         closeRecordingChrome()
         Task {
             let url = await capture.stop()
@@ -126,6 +130,8 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     private func cancelRecording() {
+        guard !isStopping else { return }
+        isStopping = true
         closeRecordingChrome()
         Task { await capture.cancel() }
     }

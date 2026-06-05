@@ -1,3 +1,6 @@
-import SniploopCore
+import AppKit
 
-print("Sniploop core \(Sniploop.coreVersion)")
+let app = NSApplication.shared
+let controller = AppController()
+app.delegate = controller
+app.run()

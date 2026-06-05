@@ -103,6 +103,11 @@ final class AppController: NSObject, NSApplicationDelegate {
                     Output.reveal(savedGIF)
                     NSLog("Sniploop: GIF saved + copied at \(savedGIF.path)")
                 }
+
+                let mp4 = try await exporter.exportMP4(master: master, spec: spec)
+                let savedMP4 = try Output.save(mp4, toFolder: Settings.defaults.destinationFolderPath, ext: "mp4")
+                await MainActor.run { NSLog("Sniploop: MP4 saved at \(savedMP4.path)") }
+
                 try? FileManager.default.removeItem(at: master)
             } catch {
                 await MainActor.run {

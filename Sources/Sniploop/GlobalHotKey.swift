@@ -4,22 +4,37 @@ import Carbon.HIToolbox
 /// A process-global hotkey via Carbon's RegisterEventHotKey. Global without the Accessibility
 /// permission that NSEvent global monitors require, and with no third-party dependency.
 final class GlobalHotKey {
+    // Each hotkey gets a unique id so its handler only responds to its own key. Carbon delivers
+    // hotkey-pressed events to every handler installed on the app target, so without this check a
+    // single keypress would fire every registered hotkey's closure.
+    private static var nextID: UInt32 = 1
+
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
+    private let hotKeyID: EventHotKeyID
     var onFire: (() -> Void)?
 
     /// `keyCode` is a Carbon virtual key code (e.g. kVK_ANSI_G); `modifiers` combine
     /// cmdKey / controlKey / optionKey / shiftKey.
     init(keyCode: UInt32, modifiers: UInt32) {
+        let id = GlobalHotKey.nextID
+        GlobalHotKey.nextID += 1
+        hotKeyID = EventHotKeyID(signature: OSType(0x534E4C50), id: id) // 'SNLP'
+
         var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        InstallEventHandler(GetApplicationEventTarget(), { _, _, userData in
-            guard let userData else { return noErr }
-            Unmanaged<GlobalHotKey>.fromOpaque(userData).takeUnretainedValue().onFire?()
+        InstallEventHandler(GetApplicationEventTarget(), { _, eventRef, userData in
+            guard let userData, let eventRef else { return noErr }
+            let me = Unmanaged<GlobalHotKey>.fromOpaque(userData).takeUnretainedValue()
+            var fired = EventHotKeyID()
+            GetEventParameter(eventRef, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
+                              nil, MemoryLayout<EventHotKeyID>.size, nil, &fired)
+            if fired.id == me.hotKeyID.id && fired.signature == me.hotKeyID.signature {
+                me.onFire?()
+            }
             return noErr
         }, 1, &eventType, Unmanaged.passUnretained(self).toOpaque(), &eventHandler)
 
-        let id = EventHotKeyID(signature: OSType(0x534E4C50), id: 1) // 'SNLP'
-        RegisterEventHotKey(keyCode, modifiers, id, GetApplicationEventTarget(), 0, &hotKeyRef)
+        RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
     }
 
     deinit {

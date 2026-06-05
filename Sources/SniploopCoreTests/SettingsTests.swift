@@ -13,6 +13,7 @@ func runSettingsTests() {
 
     let mgr2 = SettingsManager(store: MemoryStore())
     var s = Settings.defaults
+    s.defaultFormat = .mp4
     s.defaultFPS = 24
     s.defaultMaxWidth = 640
     s.showCursor = false

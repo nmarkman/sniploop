@@ -2,13 +2,15 @@ import Foundation
 
 public struct Settings: Codable, Equatable {
     public var destinationFolderPath: String
+    public var defaultFormat: OutputFormat
     public var defaultFPS: Int
     public var defaultMaxWidth: Int?
     public var showCursor: Bool
     public var launchAtLogin: Bool
 
-    public init(destinationFolderPath: String, defaultFPS: Int, defaultMaxWidth: Int?, showCursor: Bool, launchAtLogin: Bool) {
+    public init(destinationFolderPath: String, defaultFormat: OutputFormat, defaultFPS: Int, defaultMaxWidth: Int?, showCursor: Bool, launchAtLogin: Bool) {
         self.destinationFolderPath = destinationFolderPath
+        self.defaultFormat = defaultFormat
         self.defaultFPS = defaultFPS
         self.defaultMaxWidth = defaultMaxWidth
         self.showCursor = showCursor
@@ -17,6 +19,7 @@ public struct Settings: Codable, Equatable {
 
     public static let defaults = Settings(
         destinationFolderPath: NSString(string: "~/Desktop").expandingTildeInPath,
+        defaultFormat: .gif,
         defaultFPS: 15,
         defaultMaxWidth: 800,
         showCursor: true,

@@ -35,10 +35,10 @@ Replace the POC's in-memory CGImage buffer with a disk-backed video master.
 
 ## Phase 3: Export pipeline (GIF + MP4)
 
-- `Exporter` with one interface: `(masterURL, EditSpec) -> outputURL`, backed by the **bundled ffmpeg**. For this phase `EditSpec` is identity (no edits yet).
-- Bundle the ffmpeg binary (LGPL build) in `Resources/`, invoke as a child process, confirm it runs from inside the signed bundle.
-- **GIF path:** two-pass `palettegen` then `paletteuse` with `dither=sierra2_4a`.
-- **MP4 path:** H.264; stream-copy (`-c copy`) when the EditSpec is trim-only, re-encode when crop/scale applies.
+- `Exporter` with one interface: `(masterURL, EditSpec) -> outputURL`. For this phase `EditSpec` is identity (no edits yet).
+- Bundle the **gifski** binary in `Resources/`, invoke as a child process, confirm it runs from inside the signed bundle.
+- **GIF path:** extract frames at the chosen output fps via `AVAssetImageGenerator`, pipe to gifski; delete temp frames after encode.
+- **MP4 path:** native AVFoundation (`AVAssetExportSession`, H.264).
 - `Output`: save to configured folder, reveal in Finder, and **Copy GIF to clipboard**.
 - **Deliverable:** Stop produces a real GIF and an MP4 on demand; clipboard copy works.
 - **Verify:** GIF is visibly cleaner and at least ~40 percent smaller than the POC/system-encoder output for the same clip. Paste-test the clipboard GIF into Slack, Notion, Gmail, Jira and record what works (open decision 1 in the PRD).
@@ -49,7 +49,7 @@ Replace the POC's in-memory CGImage buffer with a disk-backed video master.
 - **Trim:** timeline with in/out handles; preview respects the trim.
 - **Frame rate:** 10 / 15 / 24 / 30 selector.
 - **Crop / resize:** adjustable crop rectangle over a frame, plus output max-width presets (480 / 640 / 800 / original), aspect preserved.
-- Build the `AVMutableComposition` / `AVVideoComposition` from the `EditSpec` for live preview; the same `EditSpec` drives the ffmpeg exporter, so preview matches output.
+- Build the `AVMutableComposition` / `AVVideoComposition` from the `EditSpec` for live preview; the same `EditSpec` drives the exporter (gifski for GIF, AVFoundation for MP4), so preview matches output.
 - Best-effort estimated output size.
 - Export bar: Copy GIF, Save GIF, Save MP4; remember last action as default.
 - **Keyboard shortcuts** on all primary actions (play/pause, set in/out, change fps, Copy GIF, Save GIF, Save MP4) plus an in-app **cheatsheet** (press `?`).
@@ -61,8 +61,8 @@ Replace the POC's in-memory CGImage buffer with a disk-backed video master.
 - Settings window (SwiftUI): hotkey binding (Hyper chords), **default destination folder**, default export action, default fps, default max width, **quick-mode modifier**, show-cursor toggle, launch-at-login, Screen Recording permission status + deep link.
 - Last-region recall (re-use without re-dragging).
 - Permission UX: clear first-run explanation and recovery, no crashes.
-- Packaging: finalize `build.sh` to embed and sign the ffmpeg binary; add a documented, flag-gated path to Developer ID + notarization (hardened runtime, `notarytool`, including the embedded ffmpeg) for sharing.
-- Distribution: add a permissive `LICENSE` (MIT or Apache-2.0) and a `README` with macOS install instructions; prep the public GitHub repo. (sniploop.app landing page is post-v1.)
+- Packaging: finalize `build.sh` to embed and sign the gifski binary; add a documented, flag-gated path to Developer ID + notarization (hardened runtime, `notarytool`, including the embedded gifski) for sharing.
+- Distribution: add a `LICENSE` (GPL-3.0) plus gifski's AGPL notice + source link, and a `README` with macOS install instructions; prep the public GitHub repo. (sniploop.app landing page is post-v1.)
 - Optional stretch: "Recent captures" menu.
 - **Deliverable:** v1 Nick would use daily and a coworker could install from the repo with a later notarization flip.
 - **Verify:** fresh-machine-style run (or after resetting TCC) walks cleanly through permission, capture, edit, export, following only the README.

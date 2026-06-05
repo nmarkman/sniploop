@@ -86,8 +86,8 @@ Opens with the temp clip loaded. `AVPlayer` preview plus a timeline.
 - **Keyboard shortcuts on all primary actions** (play/pause, set in/out, change fps, Copy GIF, Save GIF, Save MP4), plus an in-app **shortcut cheatsheet** (press `?`) so the shortcuts are discoverable.
 
 ### 7.5 Export
-- **GIF:** high quality via the bundled ffmpeg engine (see 9.4). Driven by the editor's EditSpec (trim/crop/scale/fps).
-- **MP4:** H.264 via the same pipeline and EditSpec, so it matches the GIF and the preview.
+- **GIF:** high quality via the bundled gifski engine (see 9.4). Driven by the editor's EditSpec (trim/crop/scale/fps).
+- **MP4:** H.264 via native AVFoundation, from the same EditSpec, so it matches the GIF and the preview.
 - Actions: Copy GIF to clipboard, Save GIF, Save MP4, each with a keyboard shortcut. Remember last-used action as the default.
 - Output naming `Capture-<timestamp>.<ext>`; destination folder from Settings (default Desktop); reveal in Finder on save.
 
@@ -119,9 +119,9 @@ Trigger (hotkey / sniploop:// URL)
        -> RegionSelector (overlay per display; glow + confirm-or-quick-mode)  -> selected rect
        -> CaptureEngine (SCStream -> AVAssetWriter -> temp .mov master)
        -> Editor (AVPlayer + AVMutableComposition: trim/crop/scale/fps preview)
-       -> Exporter (bundled ffmpeg over the master + EditSpec)
-            ├─ GIF: palettegen + paletteuse (sierra2_4a dither)
-            └─ MP4: H.264 (stream-copy when only trimming)
+       -> Exporter (over the editor composition + EditSpec)
+            ├─ GIF: AVAssetImageGenerator frames (at output fps) -> bundled gifski -> .gif
+            └─ MP4: AVAssetExportSession (H.264)
        -> Output (save to destination / reveal in Finder / copy to clipboard)
 ```
 Each unit has one job and a narrow interface: the selector returns a rect + target display; the capture engine returns the master file URL; the editor returns an EditSpec (in/out, crop, scale, fps); the exporter consumes an EditSpec + master URL and produces a file URL.
@@ -133,42 +133,43 @@ SCStream delivers sample buffers on a background queue, appended to an `AVAssetW
 Build an `AVMutableComposition` / `AVVideoComposition` from the master to drive live preview of the EditSpec (trim time range, crop region, scale). The preview approximates the export; GIF palette/dither effects only appear in the exported file.
 
 ### 9.4 Export engine
-- **One bundled binary: ffmpeg.** Chosen over gifski to keep Sniploop permissively licensed (see 9.6): an LGPL ffmpeg build sidesteps gifski's AGPL terms while delivering near-equivalent GIF quality.
-- **GIF:** two-pass `palettegen` then `paletteuse` with `dither=sierra2_4a`. Cleaner and much smaller than the system encoder.
-- **MP4:** H.264. Stream-copy (`-c copy`) when the EditSpec is trim-only (fast, lossless); re-encode only when crop/scale is applied.
-- Both formats render from the same `.mov` master and the same EditSpec, so GIF and MP4 always match each other and the editor preview.
-- ffmpeg lives in `Contents/Resources`, invoked as a child process. It must be signed, and built with the hardened runtime for later notarization.
+- **GIF: bundled gifski**, the highest-quality GIF encoder available (libimagequant quantizer with animation-aware palette and dithering). Extract frames from the edited composition at the chosen output fps via `AVAssetImageGenerator`, pipe them to gifski, which writes the `.gif`. Cleaner gradients and smaller files than the system encoder or a single global-palette approach. Chosen for quality; the GPL/AGPL licensing is a non-issue for a free, open-source app (see 9.6).
+- **MP4: native AVFoundation** (`AVAssetExportSession` over the same composition, H.264). No third-party binary needed for MP4.
+- Both formats render from the same composition and EditSpec, so GIF and MP4 always match each other and the editor preview.
+- gifski lives in `Contents/Resources`, invoked as a child process; signed, and built with the hardened runtime for later notarization. It is a separate program under its own AGPL-3.0 license (see 9.6).
 
 ### 9.5 Project structure and build
 - Promote from the single-file POC to a small Swift Package (executable target) or lightweight Xcode project, organized by the components in 9.1 (one file per unit).
-- A build script assembles the `.app`, embeds the ffmpeg binary, writes `Info.plist`, registers the `sniploop://` URL scheme, and signs.
-- Ship a permissive `LICENSE` (MIT or Apache-2.0) and a `README` with macOS install instructions.
+- A build script assembles the `.app`, embeds the gifski binary, writes `Info.plist`, registers the `sniploop://` URL scheme, and signs.
+- Ship a `LICENSE` (GPL-3.0) and a `README` with macOS install instructions, including gifski's AGPL license text and a link to its source.
 - SwiftUI for Settings and Editor windows; AppKit for the overlay and floating control (they need precise window/level control SwiftUI does not give cleanly).
 
 ### 9.6 Licensing and distribution
-- **Project license:** permissive (MIT or Apache-2.0), so Sniploop can be relicensed, commercialized, or web-distributed freely later. This is why the GIF engine is ffmpeg, not gifski.
+- **Project license: GPL-3.0.** Sniploop is free and open-source, so copyleft costs nothing here, and it lets us bundle gifski for the best GIF quality. (Sniploop is a desktop app, so AGPL's network-use clause is irrelevant; GPL-3.0 is the natural fit. Donations / a tip jar are fully compatible with GPL.)
+- **gifski compliance:** gifski is invoked as a separate bundled binary under its own AGPL-3.0 license. We satisfy it by including gifski's license text and a link to its source, which the public repo does by default. The trade we accept: Sniploop cannot later become a closed-source paid product. That is not a goal.
 - **v1 distribution:** public GitHub repository with a README walking a Mac user through download, granting Screen Recording, and optional launch-at-login.
-- **Signing:** ad-hoc for the earliest local builds; **Developer ID + notarization** (`codesign --options runtime`, `notarytool`, including the embedded ffmpeg) before sharing widely, so coworkers install without Gatekeeper warnings. Structured as a build-script flag, not a refactor. Requires an Apple Developer account ($99/yr) at that point.
+- **Signing:** ad-hoc for the earliest local builds; **Developer ID + notarization** (`codesign --options runtime`, `notarytool`, including the embedded gifski) before sharing widely, so coworkers install without Gatekeeper warnings. Structured as a build-script flag, not a refactor. Requires an Apple Developer account ($99/yr) at that point.
 - **Later (post-v1):** a landing/download page at **sniploop.app** (domain already registered) to promote and distribute the app.
+- **Reversibility:** the exporter sits behind one interface, so swapping gifski for ffmpeg (and relicensing permissively) later is a contained change if plans ever shift toward a closed/commercial build.
 
 ## 10. Open decisions and risks
 
 1. **Clipboard GIF fidelity.** macOS clipboard handling of animated GIFs is inconsistent across destination apps; some paste a static frame. Validate against Slack, Notion, Gmail, Jira early and document what works; fall back to "save then drag" if a target app misbehaves.
 2. **Multi-display capture.** Overlay spans all displays, but a single capture is one region on one display in v1 (confirmed out of scope). A selection dragged across the seam between displays clamps to the display where the drag started.
-3. **ffmpeg GIF quality vs gifski.** ffmpeg `palettegen`/`paletteuse` is close but not always equal to gifski. If a specific capture looks poor, revisit per-clip palette settings (e.g. `stats_mode`, `max_colors`). Acceptable tradeoff for the permissive license.
+3. **gifski frame extraction.** gifski encodes from extracted frames, so a long or large capture produces many temp frames. Mitigate by extracting at the chosen output fps (not the 30 fps source) and deleting temp frames after encode; the output max-width default also caps frame size. Watch peak disk/memory on long clips.
 4. **ScreenCaptureKit idle frames.** SCK only emits frames on change. Writing to AVAssetWriter needs sane timestamps so static stretches do not desync; handle via presentation timestamps from the sample buffers.
 5. **Large-region performance.** Full-display-sized regions at 30 fps are heavier; the disk-writing pipeline mitigates memory, but encode time and file size grow. Output max-width default helps.
 6. **Hotkey conflicts.** Default Hyper chord may collide with user macros; rebindable from first run, and the `sniploop://capture` URL is an always-available alternative trigger.
-7. **Notarizing embedded ffmpeg.** Each bundled binary adds a signing/notarization step; budget for it before wide distribution.
+7. **Notarizing embedded gifski.** The bundled binary adds a signing/notarization step; budget for it before wide distribution.
 
 ## 11. Milestones
 
 Detailed phasing in `docs/build-plan.md`. High level:
 
 - **M1 Capture-to-disk core:** menu bar + hotkey + `sniploop://` URL, multi-display overlay with glow and confirm/quick-mode selection, SCK-to-AVAssetWriter, floating control, save raw MP4. (Replaces the POC's in-memory path.)
-- **M2 Export pipeline:** GIF and MP4 via bundled ffmpeg, output handling and clipboard.
+- **M2 Export pipeline:** GIF via bundled gifski, MP4 via AVFoundation, output handling and clipboard.
 - **M3 Editor:** trim, fps, crop/resize, size estimate, action shortcuts + cheatsheet, what-you-see-is-what-you-export.
-- **M4 Polish, settings, distribution:** Settings (default destination, quick-mode modifier, launch-at-login, permission UX), last-region recall, permissive LICENSE + README, packaging/sign script with a notarization-ready path.
+- **M4 Polish, settings, distribution:** Settings (default destination, quick-mode modifier, launch-at-login, permission UX), last-region recall, GPL-3.0 LICENSE + README, packaging/sign script with a notarization-ready path.
 
 ## 12. Backlog (post-v1)
 

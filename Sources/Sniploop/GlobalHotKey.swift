@@ -30,8 +30,10 @@ final class GlobalHotKey {
                               nil, MemoryLayout<EventHotKeyID>.size, nil, &fired)
             if fired.id == me.hotKeyID.id && fired.signature == me.hotKeyID.signature {
                 me.onFire?()
+                return noErr
             }
-            return noErr
+            // Not our hotkey: let Carbon keep dispatching to the other installed handlers.
+            return OSStatus(eventNotHandledErr)
         }, 1, &eventType, Unmanaged.passUnretained(self).toOpaque(), &eventHandler)
 
         RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef)

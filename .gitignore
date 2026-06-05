@@ -1,0 +1,5 @@
+gifcap.app/
+*.gif
+*.mov
+*.mp4
+.DS_Store

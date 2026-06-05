@@ -1,10 +1,10 @@
-# gifcap PRD
+# Sniploop PRD
 
-Working name: **gifcap**. A fast, native macOS region GIF recorder. Status: POC validated, building v1.
+Working name: **Sniploop**. A fast, native macOS region GIF recorder. Status: POC validated, building v1.
 
 ## 1. Summary
 
-gifcap lets you press a hotkey, drag a rectangle anywhere on screen, record what happens in that region in the background, then trim and export it as a high-quality GIF or MP4. The target feeling is the macOS screenshot tool (Cmd-Shift-4), but for short animations instead of stills.
+Sniploop lets you press a hotkey, drag a rectangle anywhere on screen, record what happens in that region in the background, then trim and export it as a high-quality GIF or MP4. The target feeling is the macOS screenshot tool (Cmd-Shift-4), but for short animations instead of stills.
 
 ## 2. Problem and motivation
 

@@ -1,4 +1,4 @@
-// gifcap: throwaway feel-test for a fast region GIF recorder.
+// Sniploop: throwaway feel-test for a fast region GIF recorder.
 // Launch -> drag a region -> records in the background -> click Stop -> .gif on Desktop.
 // Single file, no Xcode. Build with ./build.sh.
 
@@ -33,7 +33,7 @@ final class Recorder: NSObject, SCStreamOutput {
     private var stream: SCStream?
     private let store = FrameStore()
     private let ciContext = CIContext(options: nil)
-    private let queue = DispatchQueue(label: "gifcap.capture")
+    private let queue = DispatchQueue(label: "sniploop.capture")
     private var cropRect: CGRect = .zero
     private let maxFrames = 900   // ~75s at 12fps; keeps memory sane for a POC
 
@@ -42,7 +42,7 @@ final class Recorder: NSObject, SCStreamOutput {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
         let displayID = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) ?? CGMainDisplayID()
         guard let display = content.displays.first(where: { $0.displayID == displayID }) ?? content.displays.first else {
-            throw NSError(domain: "gifcap", code: 1, userInfo: [NSLocalizedDescriptionKey: "No capturable display found"])
+            throw NSError(domain: "Sniploop", code: 1, userInfo: [NSLocalizedDescriptionKey: "No capturable display found"])
         }
 
         let scale = screen.backingScaleFactor
@@ -362,7 +362,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         stop?.invalidate()
         let a = NSAlert()
         a.messageText = "Can't record the screen"
-        a.informativeText = "gifcap needs Screen Recording permission.\n\nOpen System Settings > Privacy & Security > Screen Recording, enable gifcap, then launch it again.\n\n(\(error.localizedDescription))"
+        a.informativeText = "Sniploop needs Screen Recording permission.\n\nOpen System Settings > Privacy & Security > Screen Recording, enable Sniploop, then launch it again.\n\n(\(error.localizedDescription))"
         a.addButton(withTitle: "Open Settings")
         a.addButton(withTitle: "Quit")
         if a.runModal() == .alertFirstButtonReturn {

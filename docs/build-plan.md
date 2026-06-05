@@ -1,6 +1,6 @@
-# gifcap Build Plan
+# Sniploop Build Plan
 
-Phased plan to take gifcap from validated POC to a daily-driver v1. Each phase ends in something runnable and testable, so the build never goes dark for long. Reference: `docs/PRD.md`.
+Phased plan to take Sniploop from validated POC to a daily-driver v1. Each phase ends in something runnable and testable, so the build never goes dark for long. Reference: `docs/PRD.md`.
 
 ## Phase 0: Project scaffold
 

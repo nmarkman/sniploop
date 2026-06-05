@@ -1,4 +1,5 @@
 // Runs all SniploopCore checks. `swift run SniploopCoreTests` exits 0 (green) or non-zero (red).
 // Each task appends its run...() call here.
 runVersionTests()
+runCaptureGeometryTests()
 T.finish()

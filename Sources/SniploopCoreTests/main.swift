@@ -3,4 +3,5 @@
 runVersionTests()
 runCaptureGeometryTests()
 runEditSpecTests()
+runFrameTimingTests()
 T.finish()

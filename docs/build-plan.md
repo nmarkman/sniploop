@@ -2,6 +2,17 @@
 
 Phased plan to take Sniploop from validated POC to a daily-driver v1. Each phase ends in something runnable and testable, so the build never goes dark for long. Reference: `docs/PRD.md`.
 
+## Status (2026-06-05)
+
+- **Phase 0 (scaffold): DONE.** SwiftPM package, `SniploopCore` library + assertion test harness.
+- **Phase 1 (menu bar + triggers): DONE.** Menu bar app, Carbon Hyper+G hotkey, `sniploop://capture` URL scheme. (Note: hotkey is hardcoded; a rebinding UI is M4.)
+- **Phase 2 (capture-to-disk + selector): DONE.** ScreenCaptureKit -> AVAssetWriter temp `.mov`, glow + confirm/quick-mode selector, persistent recording border, floating control, keyboard stop/cancel.
+- **Phase 3 (export pipeline): DONE.** gifski GIF + AVFoundation MP4, output handling, clipboard, plus a Settings-driven output-format choice (GIF / MP4 / Both).
+- **Phase 4 (editor): NOT STARTED.** This is M3, the next milestone.
+- **Phase 5 (polish / settings / distribution): PARTIAL.** Settings window (format, fps, destination, show-cursor) and stable dev signing are done. Remaining: rebindable-hotkey UI, multi-display, last-region recall, launch-at-login, Developer ID + notarization, public-release README.
+
+The detailed task plan for the completed phases is `docs/superpowers/plans/2026-06-05-sniploop-foundation.md`. Editor (M3) and remaining M4 work still need their own plans.
+
 ## Phase 0: Project scaffold
 
 Promote the single-file POC into a maintainable structure without changing behavior yet.
@@ -15,7 +26,7 @@ Promote the single-file POC into a maintainable structure without changing behav
 ## Phase 1: Menu-bar shell + triggers (hotkey + URL scheme)
 
 - Add `NSStatusItem` menu bar item: New Capture, Settings (stub), Quit.
-- Integrate the KeyboardShortcuts package; register a default Hyper-chord hotkey to trigger New Capture. Confirm the picker accepts multi-modifier Hyper chords (Caps-Lock-as-Hyper bindings work as a normal chord) and that it works with **no Accessibility permission** (Carbon hotkey).
+- Implement a Carbon `RegisterEventHotKey` global hotkey directly (no third-party dependency); register a default Hyper-chord (Cmd-Ctrl-Opt-Shift-G) to trigger New Capture. A Caps-Lock-as-Hyper binding sends the same chord. Confirm it works with **no Accessibility permission** (Carbon hotkey).
 - Register the `sniploop://capture` URL scheme (`CFBundleURLTypes` in `Info.plist`) and handle it so Raycast / Shortcuts / Automator can trigger a capture.
 - App becomes resident (does not quit after one capture).
 - **Deliverable:** trigger the selector from the hotkey AND from `open sniploop://capture`; app lives in the menu bar.
